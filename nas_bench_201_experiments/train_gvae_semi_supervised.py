@@ -9,6 +9,10 @@ import numpy as np
 from utils import AvgrageMeter, create_exp_dir
 import tqdm
 from scipy.stats import pearsonr, kendalltau, spearmanr
+import os
+
+os.makedirs('semi_predictor', exist_ok=True)
+os.makedirs('gvae', exist_ok=True)
 
 gvae_configs = {
     'dataset' : 'ImageNet',
@@ -193,8 +197,12 @@ def validate_gvae(gvae, valid_loader, dataset = None):
 def get_gvae(configs = gvae_configs):
     # Train a semi-supervised predictor
     
-    dataset = torch.load(configs['data_path'])
-    
+    dataset = torch.load(configs['data_path'], weights_only=False)
+
+    # NOTE: original loading code is below
+    # dataset = torch.load(configs['data_path'])
+
+
     torch.manual_seed(configs['seed'])
     torch.cuda.manual_seed(configs['seed'])
     np.random.seed(configs['seed'])

@@ -7,11 +7,19 @@ import torch.nn as nn
 
 import matplotlib.pyplot as plt
 
-# In[]
-dataset = torch.load('dataset/nas_201_dataset.pth')
-# In[]
+# %matplotlib inline
+# plt.style.use('default')
 
-gvae = torch.load('gvae/gvae_semi_noICNN_16dim_ImageNet.pth')
+# In[]
+dataset = torch.load('dataset/nas_201_dataset.pth', weights_only=False)
+# In[]
+gvae = torch.load('gvae/gvae_semi_noICNN_16dim_ImageNet.pth', weights_only=False)
+
+# NOTE: original loading code is below.
+# In[]
+# dataset = torch.load('dataset/nas_201_dataset.pth')
+# In[]
+# gvae = torch.load('gvae/gvae_semi_noICNN_16dim_ImageNet.pth')
 
 
 loader = DataLoader(
@@ -74,6 +82,7 @@ def plot_surface(x1, x2, y, title, save = None, xmax = 3.0, zlim = True,
     plt.title(title)
     if save is not None:
         plt.savefig(save, dpi = 400)
+    plt.show()
         
 def plot_scatter(x1, x2, y, title, save = None, xmax = 3.0, zlim = True,
                  ):
@@ -112,6 +121,7 @@ def plot_scatter(x1, x2, y, title, save = None, xmax = 3.0, zlim = True,
     plt.title(title)
     if save is not None:
         plt.savefig(save, dpi = 400)
+    plt.show()
 
 # In[PCA]
 from sklearn.decomposition import KernelPCA
@@ -119,7 +129,7 @@ kpca = KernelPCA(2, kernel = 'linear')
 all_x = kpca.fit_transform(x_list.cpu().numpy())
 
 
-plot_scatter(all_x[:,1], all_x[:,0], 0.01*y_list.cpu(), title= 'Convexity regularized space', xmax = 0.5)
+plot_scatter(all_x[:,1], all_x[:,0], 0.01*y_list.cpu(), title= 'Convexity regularized space',save=  xmax = 0.5)
 
 # In[]
 x_list = torch.tensor(all_x).cuda()
@@ -288,6 +298,7 @@ def plot_surface(x1, x2, y, title, save = None, xmax = 5.0, zlim = True,
     plt.title(title)
     if save is not None:
         plt.savefig(save, dpi = 400)
+    plt.show()
 
 # In[]
 from sklearn.manifold import TSNE
@@ -303,6 +314,7 @@ fig = plt.figure()
 ax = fig.add_subplot(projection='3d')
 ax.scatter(all_x[:,0][indices], all_x[:,1][indices], y[indices], c = list(range(len(indices))), s = 3.0, marker="o", 
            cmap='viridis_r')
+plt.show()
 
 
 # In[]
@@ -321,6 +333,6 @@ ax = fig.add_subplot(projection='3d')
 
 ax.scatter(x1[indices], x2[indices], y[indices], c = y[indices], s = 3.0, marker="o", 
            cmap='viridis_r')
-
+plt.show()
 
 # p = ax.plot_surface(x1, x2, y_list, cmap='Spectral_r', alpha = 0.95)

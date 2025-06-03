@@ -144,7 +144,7 @@ torch.save(dataset, 'dataset/nas_201_dataset.pth')
 
 dataset = torch.load('dataset/nas_201_dataset.pth', weights_only=False)
 
-# original loading code is below
+# NOTE: original loading code is below
 # dataset = torch.load('dataset/nas_201_dataset.pth')
 
 print("✅ Dataset created and loaded successfully!")
