@@ -4,6 +4,10 @@ import torch.nn as nn
 from torch_geometric.data import Data
 import random
 from torch.utils.data import Dataset
+import os
+
+os.makedirs('dataset', exist_ok=True)
+
 
 PRIMITIVES_201 = ['avg_pool_3x3', 'nor_conv_1x1', 'skip_connect', 'nor_conv_3x3', 'none']
 
@@ -135,9 +139,17 @@ class NAS_Bench_201_Dataset(Dataset):
     def str2index(self, arch_str):
         return self.arch_str_list.index(arch_str)
     
-# dataset = NAS_Bench_201_Dataset()
-# torch.save(dataset, 'dataset/nas_201_dataset.pth')
+dataset = NAS_Bench_201_Dataset()
+torch.save(dataset, 'dataset/nas_201_dataset.pth')
+
+dataset = torch.load('dataset/nas_201_dataset.pth', weights_only=False)
+
+# original loading code is below
 # dataset = torch.load('dataset/nas_201_dataset.pth')
+
+print("✅ Dataset created and loaded successfully!")
+print(f"Dataset size: {len(dataset)}")
+print(f"Sample architecture: {dataset[0].arch_str}")
 
 
 def random_sample_a_genotype():
