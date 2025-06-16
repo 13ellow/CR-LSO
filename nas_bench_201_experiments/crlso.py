@@ -22,7 +22,7 @@ configs = {
     'nas_bench_201_dataset_path' : 'dataset/nas_201_dataset.pth',
     
     # which dataset to evaluate?
-    'dataset' : 'ImageNet',
+    'dataset' : 'CIFAR100',
     # the maximum evaluation number
     'evaluate_num' : 500,
 
@@ -32,11 +32,11 @@ configs = {
     'weight_decay' : 0.0,
     'epoch_num' : 50,
     'batch_size' : 32,
-    'topk' : 10,
+    'topk' : 5,
     
     # if do not use a pretrained, train a new one, and save it in 'gvae/gvae.pth'
     'pretrained_gvae' : True, 
-    'zdim' : 8,
+    'zdim' : 64,
     
     #clso
     'step_num' : 1,
@@ -45,7 +45,7 @@ configs = {
     'random_num' : 2000, # before searching, how many architectures should be sampled from the latent space ?
     }
 
-configs['gvae_path'] = 'gvae/gvae_semi_16dim_{}.pth'.format(configs['dataset'])
+configs['gvae_path'] = 'gvae/gvae_{}_{}.pth'.format(configs['zdim'],configs['dataset'])
 
 class ICNN_Dataset(Dataset):
     def __init__(self, labeled_set):
