@@ -22,7 +22,7 @@ configs = {
     'nas_bench_201_dataset_path' : 'dataset/nas_201_dataset.pth',
     
     # which dataset to evaluate?
-    'dataset' : 'ImageNet',
+    'dataset' : 'CIFAR10',
     # the maximum evaluation number
     'evaluate_num' : 500,
 
@@ -45,7 +45,7 @@ configs = {
     'random_num' : 2000, # before searching, how many architectures should be sampled from the latent space ?
     }
 
-configs['gvae_path'] = 'gvae/gvae_semi_16dim_{}.pth'.format(configs['dataset'])
+configs['gvae_path'] = 'gvae/gvae_{}.pth'.format(configs['dataset'])
 
 class ICNN_Dataset(Dataset):
     def __init__(self, labeled_set):

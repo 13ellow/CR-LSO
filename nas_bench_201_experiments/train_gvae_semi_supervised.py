@@ -15,7 +15,7 @@ os.makedirs('semi_predictor', exist_ok=True)
 os.makedirs('gvae', exist_ok=True)
 
 gvae_configs = {
-    'dataset' : 'ImageNet',
+    'dataset' : 'CIFAR10',
     'batch_size' : 256,
     'lr' : 1e-4,
     'betas' : (0.0, 0.5),
@@ -26,8 +26,8 @@ gvae_configs = {
     'semi_epoch_num' : 200,
     'semi_save_path' : 'semi_predictor',
     'semi_batch_size' : 32,
-    'zdim' : 16,
-    'hdim' : 256,
+    'zdim' : 64,
+    'hdim' : 512,
     'layer_num' : 3,
     'epoch_num' : 200,
     'save_path' : 'statistics',
@@ -293,7 +293,7 @@ def get_gvae(configs = gvae_configs):
 
     gvae.labeled_set = [str_list, z_list, acc_list]
      
-    torch.save(gvae, 'gvae/gvae_semi_16dim_{}.pth'.format(configs['dataset']))
+    torch.save(gvae, 'gvae/gvae_{}_{}.pth'.format(configs['zdim'],configs['dataset']))
     
 if __name__ == '__main__':
     get_gvae()
