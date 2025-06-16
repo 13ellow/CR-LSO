@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 # In[]
 dataset = torch.load('dataset/nas_201_dataset.pth', weights_only=False)
 # In[]
-gvae = torch.load('gvae/gvae_semi_noICNN_16dim_ImageNet.pth', weights_only=False)
+# gvae = torch.load('gvae/gvae_semi_noICNN_16dim_ImageNet.pth', weights_only=False)
+gvae = torch.load('gvae/gvae_semi_16dim_ImageNet.pth', weights_only=False)
 
 # NOTE: original loading code is below.
 # In[]
@@ -73,12 +74,12 @@ def plot_surface(x1, x2, y, title, save = None, xmax = 3.0, zlim = True,
     ax.set_ylim(-xmax, xmax)
 
     # cbar.set_label('Values')
-    ax.xaxis.pane.fill = False
-    ax.yaxis.pane.fill = False
-    ax.zaxis.pane.fill = False
-    ax.xaxis.pane.set_edgecolor('k')
-    ax.yaxis.pane.set_edgecolor('k')
-    ax.zaxis.pane.set_edgecolor('k')
+    # ax.xaxis.pane.fill = False
+    # ax.yaxis.pane.fill = False
+    # ax.zaxis.pane.fill = False
+    # ax.xaxis.pane.set_edgecolor('k')
+    # ax.yaxis.pane.set_edgecolor('k')
+    # ax.zaxis.pane.set_edgecolor('k')
     plt.title(title)
     if save is not None:
         plt.savefig(save, dpi = 400)
@@ -112,11 +113,11 @@ def plot_scatter(x1, x2, y, title, save = None, xmax = 3.0, zlim = True,
     # ax.set_ylim(-3.0, 3.0)
 
     # cbar.set_label('Values')
-    ax.xaxis.pane.fill = False
-    ax.yaxis.pane.fill = False
+    # ax.xaxis.pane.fill = False
+    # ax.yaxis.pane.fill = False
     # ax.zaxis.pane.fill = False
-    ax.xaxis.pane.set_edgecolor('k')
-    ax.yaxis.pane.set_edgecolor('k')
+    # ax.xaxis.pane.set_edgecolor('k')
+    # ax.yaxis.pane.set_edgecolor('k')
     # ax.zaxis.pane.set_edgecolor('k')
     plt.title(title)
     if save is not None:
@@ -129,7 +130,7 @@ kpca = KernelPCA(2, kernel = 'linear')
 all_x = kpca.fit_transform(x_list.cpu().numpy())
 
 
-plot_scatter(all_x[:,1], all_x[:,0], 0.01*y_list.cpu(), title= 'Convexity regularized space',save=  xmax = 0.5)
+plot_scatter(all_x[:,1], all_x[:,0], 0.01*y_list.cpu(), title= 'Convexity regularized space', save="Scatter_all.png", xmax = 0.5)
 
 # In[]
 x_list = torch.tensor(all_x).cuda()
@@ -191,7 +192,7 @@ with torch.no_grad():
     pred = net(inputs)
 pred = pred.reshape(x1.shape)
 
-plot_surface(x1.cpu(), x2.cpu(), pred.cpu(), title = 'convexity regularized space', xmax = 1.6)
+plot_surface(x1.cpu(), x2.cpu(), pred.cpu(), title = 'convexity regularized space', save= "Surface_WithOutDecay.png", xmax = 1.6)
 
 # In[]
 from sklearn.manifold import TSNE
@@ -256,7 +257,7 @@ with torch.no_grad():
     pred = net(inputs)
 pred = pred.reshape(x1.shape)
 
-plot_surface(x1.cpu(), x2.cpu(), pred.cpu(), title = 'convexity regularizedc space')
+plot_surface(x1.cpu(), x2.cpu(), pred.cpu(), title = 'convexity regularized space', save="Surface_WithDecay.png")
 
 # In[]
 import matplotlib.pyplot as plt

@@ -45,7 +45,7 @@ configs = {
     'random_num' : 2000, # before searching, how many architectures should be sampled from the latent space ?
     }
 
-configs['gvae_path'] = 'gvae/gvae_{}.pth'.format(configs['dataset'])
+configs['gvae_path'] = 'gvae/gvae_semi_16dim_{}.pth'.format(configs['dataset'])
 
 class ICNN_Dataset(Dataset):
     def __init__(self, labeled_set):
@@ -62,15 +62,21 @@ class CRLSO:
     def __init__(self, configs = configs):
         # self.api = API(configs['nas_bench_201_path'])
         self.database = NASBench201DataBase('data/nasbench201_with_edge_flops_and_params.json')
-        self.dataset = torch.load(configs['nas_bench_201_dataset_path'])
+        self.dataset = torch.load(configs['nas_bench_201_dataset_path'],weights_only=False)
+
+        # NOTE: Original code is below.
+        # self.dataset = torch.load(configs['nas_bench_201_dataset_path'])
         self.configs = configs
         
         if configs['pretrained_gvae']:
             pass
         else:
             train_gvae()
-        self.gvae = torch.load(configs['gvae_path']).cuda()
-        
+        self.gvae = torch.load(configs['gvae_path'],weights_only=False).cuda()
+
+        # NOTE: Original code is below.
+        # self.gvae = torch.load(configs['gvae_path']).cuda()
+
         self.labeled_set = self.gvae.labeled_set
         
     def main_loop(self, noise = True):
