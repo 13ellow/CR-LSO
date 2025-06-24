@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 dataset = torch.load('dataset/nas_201_dataset.pth', weights_only=False)
 # In[]
 # gvae = torch.load('gvae/gvae_semi_noICNN_16dim_ImageNet.pth', weights_only=False)
-gvae = torch.load('gvae/gvae_semi_16dim_ImageNet.pth', weights_only=False)
+gvae = torch.load('gvae/gvae_64_ImageNet.pth', weights_only=False)
 
 # NOTE: original loading code is below.
 # In[]
