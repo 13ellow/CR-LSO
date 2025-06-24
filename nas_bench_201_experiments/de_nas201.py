@@ -6,7 +6,7 @@ import operator
 from models import ArchGVAE, GNN_Predictor
 from torch_geometric.loader import DataLoader
 from torch_geometric.data import Data
-from collect_201_dataset import conver_cell2graph
+from collect_201_dataset import conver_cell2graph, arch2list
 import logging
 import sys
 
@@ -140,8 +140,19 @@ def create_evaluation_function(gvae, predictor):
             arch_tensor = gvae.get_tensor(z)
             arch_str = gvae.conver_tensor2arch(arch_tensor)
             
-            # アーキテクチャ文字列からグラフ構造を作成
-            graph_data = conver_cell2graph(arch_str, return_type='torch_geometric')
+            # アーキテクチャ文字列をリストに変換
+            arch_list = arch2list(arch_str)
+            
+            # アーキテクチャリストからグラフ構造を作成
+            edge_index, node_attr, edge_attr, cell_tensor = conver_cell2graph(arch_list)
+            
+            # PyTorch Geometricのデータ構造に変換
+            graph_data = Data(
+                x=node_attr,
+                edge_index=edge_index,
+                edge_attr=edge_attr,
+                tensor=cell_tensor
+            )
             graph_data = graph_data.cuda()
             
             # predictorで性能を予測
