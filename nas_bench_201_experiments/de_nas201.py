@@ -7,7 +7,7 @@ import operator
 from models import ArchGVAE, GNN_Predictor
 from torch_geometric.loader import DataLoader
 from torch_geometric.data import Data
-from arch_utils import conver_cell2graph, arch2list
+from collect_201_dataset import conver_cell2graph, arch2list
 import logging
 import sys
 from typing import Optional
