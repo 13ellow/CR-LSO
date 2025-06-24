@@ -5,6 +5,8 @@ import random
 import operator
 from models import ArchGVAE, GNN_Predictor
 from torch_geometric.loader import DataLoader
+from torch_geometric.data import Data
+from collect_201_dataset import conver_cell2graph
 import logging
 import sys
 
@@ -134,9 +136,16 @@ def create_evaluation_function(gvae, predictor):
         with torch.no_grad():
             z = latent_vector.unsqueeze(0).cuda()
             
+            # 潜在表現からアーキテクチャ文字列を生成
             arch_tensor = gvae.get_tensor(z)
+            arch_str = gvae.conver_tensor2arch(arch_tensor)
             
-            pred_acc = predictor(arch_tensor)
+            # アーキテクチャ文字列からグラフ構造を作成
+            graph_data = conver_cell2graph(arch_str, return_type='torch_geometric')
+            graph_data = graph_data.cuda()
+            
+            # predictorで性能を予測
+            pred_acc = predictor(graph_data)
             
             return pred_acc.item()
     
