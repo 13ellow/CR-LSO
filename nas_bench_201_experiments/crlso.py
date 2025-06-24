@@ -84,6 +84,7 @@ class CRLSO:
         while len(self.labeled_set[1]) < (self.configs['evaluate_num']):
             self.tune_icnn()
         
+            # 部分データセットから上位5つの構造を取得
             values, indices = self.labeled_set[2].topk(self.configs['topk'])
             
             # topk_arch_strs = [self.labeled_set[0][indice] for indice in indices]
