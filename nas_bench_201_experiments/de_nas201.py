@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import numpy as np
@@ -6,9 +7,10 @@ import operator
 from models import ArchGVAE, GNN_Predictor
 from torch_geometric.loader import DataLoader
 from torch_geometric.data import Data
-from collect_201_dataset import conver_cell2graph, arch2list
+from arch_utils import conver_cell2graph, arch2list
 import logging
 import sys
+from typing import Optional
 
 # ログ設定
 log_format = '%(asctime)s %(message)s'
@@ -16,18 +18,18 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, da
 
 # 設定
 configs = {
-    'INITIAL_F': 0.5,
-    "INITIAL_CR": 0.5,
-    "F_GAMMA": 0.1,
-    "CR_GAMMA": 0.1,
-    "F_LOWEST": 0.1,
-    "F_UPPER" : 0.9,
-    "DIMENSION":64,
-    "POPULATION_SIZE": 50,
-    "GENERATION": 100,
+    'result_path': "results/0624/",
 
-    "MIN_VALUE":  -10,
-    "MAX_VALUE":  10,
+    'INITIAL_F': 0.5,
+    'INITIAL_CR': 0.5,
+    'F_GAMMA': 0.1,
+    'CR_GAMMA': 0.1,
+    'F_LOWEST': 0.1,
+    'F_UPPER': 0.9,
+    'DIMENSION': 64,
+    'POPULATION_SIZE': 500,
+    'GENERATION': 100,
+
     'dataset': 'ImageNet',  # 'CIFAR10', 'CIFAR100', 'ImageNet'
     'gvae_path': 'gvae/gvae_64_ImageNet.pth',
     'predictor_path': 'semi_predictor/semi_predictor_ImageNet.pth',
@@ -35,8 +37,24 @@ configs = {
     'seed': 42
 }
 
+latent_data = torch.load(configs['latent_path'],weights_only=False)
+
+def get_border_vaules(latent_data):
+    MAX_value = [-float("inf") for i in range(configs["DIMENSION"])]
+    MIN_value = [float("inf") for i in range(configs["DIMENSION"])]
+
+    for di in range(configs["DIMENSION"]):
+        for latent in latent_data:
+            MAX_value[di] = max(latent[di],MAX_value[di])
+            MIN_value[di] = min(latent[di],MIN_value[di])
+    
+    return MAX_value, MIN_value
+configs['MAX_VALUES'], configs['MIN_VALUES'] = get_border_vaules(latent_data)
+
+os.makedirs(configs['result_path'], exist_ok=True)
+
 class Individual:
-    def __init__(self, gene=None, eval_func=None):
+    def __init__(self, gene: Optional[torch.tensor]=None, eval_func=None):
         self.gene = gene
         self.eval_func = eval_func
         self.fitness = self.evaluate()
@@ -61,8 +79,9 @@ class DE:
         torch.manual_seed(seed)
         
         self.population = []
-        for _ in range(population_size):
-            gene = torch.FloatTensor(configs['DIMENSION']).uniform_(configs['MIN_VALUE'], configs['MAX_VALUE'])
+        for i in range(population_size):
+            # TODO：gvaeのエンコードで取得した潜在表現を使用する
+            gene = latent_data[i]
             individual = Individual(gene=gene, eval_func=eval_func)
             self.population.append(individual)
         
@@ -90,7 +109,7 @@ class DE:
             
             for j in range(configs['DIMENSION']):
                 if np.random.rand() < self.population[i].CR or j == jrand:
-                    if configs['MIN_VALUE'] <= mutant[j] <= configs['MAX_VALUE']:
+                    if configs['MIN_VALUES'][j] <= mutant[j] <= configs['MAX_VALUES'][j]:
                         trial[j] = mutant[j]
                     else:
                         trial[j] = self.population[i].gene[j]
@@ -130,6 +149,7 @@ class DE:
         
         return self.get_best_individual(top_n=5)
 
+# TODO：評価関数の構造を見直す
 def create_evaluation_function(gvae, predictor):
     """GVAEとpredictorを使用した評価関数を作成"""
     def evaluate(latent_vector):
@@ -178,7 +198,7 @@ def main():
     gvae.eval()
     predictor.eval()
     
-    eval_func = create_evaluation_function(gvae, predictor)
+    # eval_func = create_evaluation_function(gvae, predictor)
     
     de = DE(eval_func, population_size=configs['POPULATION_SIZE'], seed=configs['seed'])
     best_individuals = de.evolve(generations=configs['GENERATION'])
@@ -189,10 +209,10 @@ def main():
         logging.info(f"Rank {i+1}: Predicted={individual.fitness:.6f}, Architecture={arch_str}")
 
     best_latents = torch.stack([ind.gene for ind in best_individuals])
-    torch.save(best_latents, f'de_best_latents_{configs["dataset"]}.pth')
+    torch.save(best_latents, f'{configs["result_path"]}de_best_latents_{configs["dataset"]}.pth')
     
     best_fitnesses = [ind.fitness for ind in best_individuals]
-    torch.save(best_fitnesses, f'de_best_fitnesses_{configs["dataset"]}.pth')
+    torch.save(best_fitnesses, f'{configs["result_path"]}de_best_fitnesses_{configs["dataset"]}.pth')
     
     logging.info("Save the results")
 
