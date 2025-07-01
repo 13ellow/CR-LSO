@@ -16,6 +16,8 @@ from typing import Optional
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
 
+datasets = "ImageNet"
+
 # 設定
 configs = {
     'result_path': "results/0701/",
@@ -30,9 +32,9 @@ configs = {
     'POPULATION_SIZE': 500,
     'GENERATION': 100,
 
-    'dataset': 'ImageNet',  # 'CIFAR10', 'CIFAR100', 'ImageNet'
-    'gvae_path': 'gvae/gvae_64_ImageNet.pth',
-    'predictor_path': 'semi_predictor/semi_predictor_ImageNet.pth',
+    'dataset': datasets,  # 'CIFAR10', 'CIFAR100', 'ImageNet'
+    'gvae_path': 'gvae/gvae_64_{}.pth'.format(datasets),
+    'predictor_path': 'semi_predictor/semi_predictor_{}.pth'.format(datasets),
     'latent_path': 'dataset/latent_representations_64dim.pth',
     'seed': 42
 }

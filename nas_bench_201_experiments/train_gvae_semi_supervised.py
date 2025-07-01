@@ -15,7 +15,7 @@ os.makedirs('semi_predictor', exist_ok=True)
 os.makedirs('gvae', exist_ok=True)
 
 gvae_configs = {
-    'dataset' : 'ImageNet',
+    'dataset' : 'CIFAR100',
     'batch_size' : 256,
     'lr' : 1e-4,
     'betas' : (0.0, 0.5),
