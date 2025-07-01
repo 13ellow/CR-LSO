@@ -18,7 +18,7 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, da
 
 # 設定
 configs = {
-    'result_path': "results/0624/",
+    'result_path': "results/0701/",
 
     'INITIAL_F': 0.5,
     'INITIAL_CR': 0.5,
@@ -198,7 +198,7 @@ def main():
     gvae.eval()
     predictor.eval()
     
-    # eval_func = create_evaluation_function(gvae, predictor)
+    eval_func = create_evaluation_function(gvae, predictor)
     
     de = DE(eval_func, population_size=configs['POPULATION_SIZE'], seed=configs['seed'])
     best_individuals = de.evolve(generations=configs['GENERATION'])
