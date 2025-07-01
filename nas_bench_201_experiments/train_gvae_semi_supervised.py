@@ -33,7 +33,7 @@ gvae_configs = {
     'save_path' : 'statistics',
     'datasets' : ['CIFAR10', 'CIFAR100', 'ImageNet'],
     'seed' : 0,
-    }
+}
 
 
 log_format = '%(asctime)s %(message)s'
