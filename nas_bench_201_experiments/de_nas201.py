@@ -16,7 +16,7 @@ from typing import Optional
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
 
-datasets = "ImageNet"
+datasets = "CIFAR10"
 
 # 設定
 configs = {
