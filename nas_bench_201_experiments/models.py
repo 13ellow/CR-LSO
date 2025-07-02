@@ -35,7 +35,7 @@ class Resid_MLP(nn.Module):
         return self.mlp(x) + self.resid(x)
     
 class ICNN(nn.Module):
-    def __init__(self, input_dim, hidden_dim = 128, output_dim = 1, hidden_layer = 3):
+    def __init__(self, input_dim, hidden_dim = 256, output_dim = 1, hidden_layer = 3):
         super(ICNN, self).__init__()
         self.affine_layer = nn.Sequential(nn.Linear(input_dim, hidden_dim),
                                           nn.LeakyReLU())

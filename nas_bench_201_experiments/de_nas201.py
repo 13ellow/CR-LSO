@@ -35,7 +35,7 @@ configs = {
     'dataset': datasets,  # 'CIFAR10', 'CIFAR100', 'ImageNet'
     'gvae_path': 'gvae/gvae_64_{}.pth'.format(datasets),
     'predictor_path': 'semi_predictor/semi_predictor_{}.pth'.format(datasets),
-    'latent_path': 'dataset/latent_representations_64dim.pth',
+    'latent_path': 'dataset/latent_representations_64dim_{}.pth'.format(datasets),
     'seed': 42
 }
 
