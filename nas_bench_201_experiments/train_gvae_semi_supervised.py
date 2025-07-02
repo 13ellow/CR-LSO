@@ -10,6 +10,7 @@ from utils import AvgrageMeter, create_exp_dir
 import tqdm
 from scipy.stats import pearsonr, kendalltau, spearmanr
 import os
+import pandas as pd
 
 os.makedirs('semi_predictor', exist_ok=True)
 os.makedirs('gvae', exist_ok=True)
@@ -17,23 +18,36 @@ os.makedirs('gvae', exist_ok=True)
 gvae_configs = {
     'dataset' : 'ImageNet',
     'batch_size' : 512,
+
     'lr' : 1e-4,
     'betas' : (0.0, 0.5),
     'weight_decay' : 3e-5, 
     'data_path' : 'dataset/nas_201_dataset.pth',
     'graph_clip' : 5.0,
-    'portion_for_semipredictor' : 0.0192,
+
+    'portion_for_semipredictor' : 0.0192, # portion for Q_start = 300
     'semi_epoch_num' : 200,
     'semi_save_path' : 'semi_predictor',
     'semi_batch_size' : 32,
+
     'zdim' : 64,
     'hdim' : 512,
+
     'layer_num' : 3,
     'epoch_num' : 200,
     'save_path' : 'statistics',
     'datasets' : ['CIFAR10', 'CIFAR100', 'ImageNet'],
-    'seed' : 0,
+    'seed' : 0, #random seed
 }
+
+losses_train = []
+reses_train = []
+klds_train = []
+preds_train = []
+losses_valid = []
+reses_valid = []
+klds_valid = []
+preds_valid = []
 
 
 log_format = '%(asctime)s %(message)s'
@@ -110,7 +124,7 @@ def validate_semipredictor(predictor, valid_loader, dataset = None):
     s = spearmanr(acc_all, pred_acc_all)[0]
 
     return objs_pred.avg, p, tau, s       
-        
+
 def train_gvae(gvae, predictor, train_loader, optimizer, dataset = None):
     
     mse = nn.MSELoss(reduction = 'mean')
@@ -193,20 +207,55 @@ def validate_gvae(gvae, valid_loader, dataset = None):
         
     return objs.avg, objs_res.avg, objs_kld.avg, objs_pred.avg
 
+def collect_metrics(loss,res,kld,pred,isTraining=False):
+    if isTraining:
+        losses_train.append(loss)
+        reses_train.append(res)
+        klds_train.append(kld)
+        preds_train.append(pred)
+    else:
+        losses_valid.append(loss)
+        reses_valid.append(res)
+        klds_valid.append(kld)
+        preds_valid.append(pred)
+
+def export_metrics():    
+    metrics_data = {
+        'epoch': range(len(losses_train)),
+        'loss_train': losses_train,
+        'res_train': reses_train,
+        'kld_train': klds_train,
+        'pred_train': preds_train,
+        'loss_valid': losses_valid,
+        'res_valid': reses_valid,
+        'kld_valid': klds_valid,
+        'pred_valid': preds_valid
+    }
+    
+    df = pd.DataFrame(metrics_data)
+    
+    csv_path = f'gvae/training_metrics_{gvae_configs["dataset"]}.csv'
+    df.to_csv(csv_path, index=False)
+    logging.info(f'Training metrics exported to {csv_path}')
+    
+    try:
+        excel_path = f'gvae/training_metrics_{gvae_configs["dataset"]}.xlsx'
+        df.to_excel(excel_path, index=False)
+        logging.info(f'Training metrics exported to {excel_path}')
+    except ImportError:
+        logging.warning('openpyxl not available, skipping Excel export')
 
 def get_gvae(configs = gvae_configs):
     # Train a semi-supervised predictor
-    
-    dataset = torch.load(configs['data_path'], weights_only=False)
 
+    # dataset = torch.load(configs['data_path'], weights_only=False)
     # NOTE: original loading code is below
-    # dataset = torch.load(configs['data_path'])
-
+    dataset = torch.load(configs['data_path'])
 
     torch.manual_seed(configs['seed'])
     torch.cuda.manual_seed(configs['seed'])
     np.random.seed(configs['seed'])
-    
+
     data_num = len(dataset)
     indices = list(range(data_num))
     split = int(np.floor(configs['portion_for_semipredictor'] * data_num))
@@ -214,24 +263,29 @@ def get_gvae(configs = gvae_configs):
     train_loader = DataLoader(
         dataset, batch_size = configs['semi_batch_size'],
         sampler = torch.utils.data.sampler.SubsetRandomSampler(indices[:split])
-        )
-    
+    )
     valid_loader = DataLoader(
         dataset, batch_size = 1048,
         sampler = torch.utils.data.sampler.SubsetRandomSampler(indices[split:])
-        )
+    )
 
-    semipredictor = GNN_Predictor().cuda()
-    
+    semipredictor = GNN_Predictor(
+        xdim=4,
+        edim=5,      
+        hdim=512,
+        zdim=64,
+        layer_num=3  
+    ).cuda()
+
     optimizer = torch.optim.Adam(
         semipredictor.parameters(),
         lr = 1e-4, betas = configs['betas'], weight_decay = 0.0
-        )
-        
+    )
+
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max = float(configs['semi_epoch_num']), eta_min = 1e-5
-        )
-    
+    )
+
     for epoch in tqdm.tqdm(range(configs['semi_epoch_num'])):
         pred_objs= train_semipredictor(semipredictor, optimizer, train_loader, dataset = configs['dataset'])
         pred_objs_valid, p, tau, s = validate_semipredictor(semipredictor, valid_loader, dataset = configs['dataset'])
@@ -239,31 +293,46 @@ def get_gvae(configs = gvae_configs):
         logging.info('Train the semi-predictor, epoch:%d, loss_pred_train:%e loss_pred_valid:%e, p:%.3f, tau:%.3f s:%.3f',
                      epoch, pred_objs, pred_objs_valid, p, tau, s)
         
+
     torch.save(semipredictor, configs['semi_save_path'] + '/semi_predictor_{}.pth'.format(configs['dataset']))
-    
+
+
+    # G-VAE and ICNN-Predictor training
+
     for parameter in semipredictor.parameters():
         parameter.requires_grad = False
-        
+
     gvae_train_loader = DataLoader(
         dataset, batch_size = configs['batch_size'],
         shuffle = True)
-          
-    gvae = ArchGVAE(hdim = configs['hdim'], zdim = configs['zdim'], layers = configs['layer_num']).cuda()
-    
+
+    gvae = ArchGVAE(
+        hdim = configs['hdim'], 
+        zdim = configs['zdim'], 
+        layers = configs['layer_num']
+    ).cuda()
+
     optimizer = torch.optim.Adam(
         gvae.parameters(),
         lr = configs['lr'], betas = configs['betas'], weight_decay = configs['weight_decay']
-        )
-    
+    )
+
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = float(configs['epoch_num']), eta_min = 0.0)
     for epoch in tqdm.tqdm(range(configs['epoch_num'])):
         loss, res, kld, pred = train_gvae(gvae, semipredictor, gvae_train_loader, optimizer, dataset = configs['dataset']) 
+        collect_metrics(loss,res,kld,pred,isTraining=True)
+
         loss_valid, res_valid, kld_valid, pred_valid  = validate_gvae(gvae, valid_loader, dataset = configs['dataset'])
+        collect_metrics(loss_valid,res_valid,kld_valid,pred_valid,isTraining=False)
+
         scheduler.step()
-        
+
         logging.info('Train gvae, epoch:%d, loss_train:%e loss_pred:%e, loss_valid:%e, loss_pred:%e',
                      epoch, loss, pred, loss_valid, pred_valid
-                     )
+        )
+
+    export_metrics()
+
     # save the labeled set for the following cr-lso
     str_list = []
     acc_list = []
@@ -278,22 +347,22 @@ def get_gvae(configs = gvae_configs):
                 acc = arch.valid_acc_cifar100
             elif configs['dataset'] == 'ImageNet':
                 acc = arch.valid_acc_imagenet
-                
+
             mu, logvar = gvae.encode(arch)
-            
+
             acc = 0.01*acc
-            
+
             str_list = str_list + arch.arch_str
             acc_list.append(acc.squeeze().cpu())
             z_list.append(mu.squeeze().cpu())
-    
- 
+
+
     acc_list = torch.cat(acc_list, dim = 0)
     z_list = torch.cat(z_list, dim = 0)
 
     gvae.labeled_set = [str_list, z_list, acc_list]
-     
+
     torch.save(gvae, 'gvae/gvae_{}_{}.pth'.format(configs['zdim'],configs['dataset']))
-    
+
 if __name__ == '__main__':
     get_gvae()

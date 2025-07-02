@@ -88,19 +88,20 @@ class NodeConv(MessagePassing):
         tmp = torch.cat([x_i, x_j, edge_attr], dim = 1)
         return self.kernel(tmp)
 
+# Semi-Predictor
 class GNN_Predictor(nn.Module):
-    def __init__(self, xdim = 4, edim = 5, hdim = 64, zdim = 64,
-                 layer_num = 4):
+    def __init__(self, xdim = 4, edim = 5, hdim = 512, zdim = 64,
+                 layer_num = 3):
         super(GNN_Predictor, self).__init__()
+
         self.convs = nn.ModuleList()
-        self.convs.append(NodeConv(xdim, edim, hdim))
-        
+        self.convs.append(NodeConv(xdim, edim, hdim))        
+
         for layer in range(layer_num - 1):
             self.convs.append(NodeConv(hdim, edim, hdim))
-            
-        self.fc3 = nn.Linear(4*hdim, zdim)
-        
-        self.mlp = MLP(zdim, hdim, hidden_layer = 3)
+
+        self.fc3 = nn.Linear(4*hdim, zdim)        
+        self.mlp = MLP(input_dim=zdim, hidden_dim=hdim, hidden_layer = 3)
         
     def encode(self, arch):
         batch = len(arch.tensor)
@@ -114,7 +115,6 @@ class GNN_Predictor(nn.Module):
         mu = self.fc3(hidden_graph)
         
         return mu
-    
     
     def forward(self, arch):
         z = self.encode(arch)
