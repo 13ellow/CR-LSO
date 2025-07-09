@@ -249,9 +249,9 @@ def export_metrics():
 def get_gvae(configs = gvae_configs):
     # Train a semi-supervised predictor
 
-    # dataset = torch.load(configs['data_path'], weights_only=False)
+    dataset = torch.load(configs['data_path'], weights_only=False)
     # NOTE: original loading code is below
-    dataset = torch.load(configs['data_path'])
+    # dataset = torch.load(configs['data_path'])
 
     torch.manual_seed(configs['seed'])
     torch.cuda.manual_seed(configs['seed'])
