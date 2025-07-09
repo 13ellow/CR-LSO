@@ -14,6 +14,7 @@ import pandas as pd
 
 os.makedirs('semi_predictor', exist_ok=True)
 os.makedirs('gvae', exist_ok=True)
+os.makedirs('icnn', exist_ok=True)
 
 gvae_configs = {
     'dataset' : 'ImageNet',
@@ -363,6 +364,10 @@ def get_gvae(configs = gvae_configs):
     gvae.labeled_set = [str_list, z_list, acc_list]
 
     torch.save(gvae, 'gvae/gvae_{}_{}.pth'.format(configs['zdim'],configs['dataset']))
+    
+    # Save the ICNN parameters separately
+    torch.save(gvae.icnn.state_dict(), 'icnn/icnn_{}_{}.pth'.format(configs['zdim'],configs['dataset']))
+    logging.info('ICNN parameters saved to icnn/icnn_{}_{}.pth'.format(configs['zdim'],configs['dataset']))
 
 if __name__ == '__main__':
     get_gvae()

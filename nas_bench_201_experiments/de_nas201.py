@@ -29,8 +29,8 @@ configs = {
     'F_LOWEST': 0.1,
     'F_UPPER': 0.9,
     'DIMENSION': 64,
-    'POPULATION_SIZE': 500,
-    'GENERATION': 100,
+    'POPULATION_SIZE': 100,
+    'GENERATION': 50,
 
     'dataset': datasets,  # 'CIFAR10', 'CIFAR100', 'ImageNet'
     'gvae_path': 'gvae/gvae_64_{}.pth'.format(datasets),
