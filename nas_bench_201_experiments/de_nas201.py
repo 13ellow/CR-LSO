@@ -12,6 +12,9 @@ from models import ICNN
 import logging
 import sys
 from typing import Optional
+from torch.utils.data import Dataset, DataLoader
+import tqdm
+from utils import AvgrageMeter
 
 # ログ設定
 log_format = '%(asctime)s %(message)s'
@@ -38,7 +41,14 @@ configs = {
     # 'predictor_path': 'semi_predictor/semi_predictor_{}.pth'.format(datasets),
     'predictor_path': 'icnn/icnn_64_{}.pth'.format(datasets),
     'latent_path': 'dataset/latent_representations_64dim_{}.pth'.format(datasets),
-    'seed': 42
+    'seed': 42,
+    
+    # ICNN微調整設定
+    'icnn_lr': 1e-4,
+    'icnn_betas': (0.0, 0.5),
+    'icnn_epoch_num': 10,
+    'icnn_batch_size': 32,
+    'tune_interval': 10  # 何世代ごとにICNN微調整するか
 }
 
 latent_data = torch.load(configs['latent_path'],weights_only=False)
@@ -137,12 +147,22 @@ class DE:
         total_fitness = sum(ind.fitness for ind in self.population)
         return total_fitness / self.population_size
 
-    def evolve(self, generations=None):
+    def evolve(self, generations=None, icnn=None):
         if generations is None:
             generations = configs['GENERATION']
         logging.info("Starting DE...")
         
         for generation in range(generations):
+            # ICNN微調整（指定間隔で実行）
+            if icnn is not None and generation % configs['tune_interval'] == 0 and generation > 0:
+                logging.info(f"ICNN微調整実行中... (Generation {generation+1})")
+                icnn = tune_icnn(icnn, self.population)
+                # 評価関数を更新
+                eval_func = create_evaluation_function(None, icnn)
+                for individual in self.population:
+                    individual.eval_func = eval_func
+                    individual.fitness = individual.evaluate()
+            
             updated_count = self.mutation_and_crossover()
             avg_fitness = self.get_average_fitness()
             best_individual = self.get_best_individual(1)[0]
@@ -174,6 +194,67 @@ def convert_latent_to_architecture(gvae, latent_vector):
         arch_str = gvae.conver_tensor2arch(arch_tensor)
         return arch_str
 
+class ICNN_Dataset(Dataset):
+    def __init__(self, latent_vectors, fitness_values):
+        super().__init__()
+        self.latent_vectors = latent_vectors
+        self.fitness_values = fitness_values
+
+    def __getitem__(self, idx):
+        return self.latent_vectors[idx], self.fitness_values[idx]
+
+    def __len__(self):
+        return len(self.latent_vectors)
+
+def tune_icnn(icnn, population):
+    """現在の集団を使ってICNNを微調整"""
+    # 集団から潜在ベクトルと適応度を抽出
+    latent_vectors = torch.stack([ind.gene for ind in population])
+    fitness_values = torch.tensor([ind.fitness for ind in population], dtype=torch.float32)
+    
+    dataset = ICNN_Dataset(latent_vectors, fitness_values)
+    dataloader = DataLoader(dataset, batch_size=configs['icnn_batch_size'], shuffle=True)
+    
+    optimizer = torch.optim.Adam(
+        icnn.parameters(),
+        lr=configs['icnn_lr'], 
+        betas=configs['icnn_betas'], 
+        weight_decay=1e-5
+    )
+    
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=float(configs['icnn_epoch_num']), eta_min=1e-5
+    )
+    
+    mse = nn.MSELoss(reduction='mean')
+    
+    for epoch in range(configs['icnn_epoch_num']):
+        objs = AvgrageMeter()
+        
+        for step, (latents, fitness) in enumerate(dataloader):
+            n = len(latents)
+            latents = latents.cuda()
+            fitness = fitness.cuda()
+            
+            # ICNNの出力を適応度と一致させる
+            pred_fitness = (-icnn(latents) + 1.0).squeeze()
+            
+            loss = mse(fitness, pred_fitness)
+            
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            
+            objs.update(loss.data.item(), n)
+            
+            # ICNN制約の適用
+            icnn.constraint_weights()
+        
+        scheduler.step()
+    
+    logging.info('ICNN微調整完了, loss: %e', objs.avg)
+    return icnn
+
 def main():
     logging.info("Loading Model...")
     gvae = torch.load(configs['gvae_path'], weights_only=False).cuda()
@@ -188,7 +269,7 @@ def main():
     eval_func = create_evaluation_function(gvae, icnn)
     
     de = DE(eval_func, population_size=configs['POPULATION_SIZE'], seed=configs['seed'])
-    best_individuals = de.evolve(generations=configs['GENERATION'])
+    best_individuals = de.evolve(generations=configs['GENERATION'], icnn=icnn)
     
     logging.info("=== DE Results ===")
     for i, individual in enumerate(best_individuals):
