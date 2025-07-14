@@ -1,31 +1,47 @@
-import os
-import torch
-import torch.nn as nn
-import numpy as np
-import random
-import operator
+from collect_201_dataset import NAS_Bench_201_Dataset, random_sample_a_genotype, conver_cell2graph
 from models import ArchGVAE, GNN_Predictor
-from torch_geometric.loader import DataLoader
-from torch_geometric.data import Data
-from collect_201_dataset import conver_cell2graph, arch2list
-from models import ICNN
+import torch.nn as nn
 import logging
 import sys
-from typing import Optional
+import torch
 from torch.utils.data import Dataset, DataLoader
+import numpy as np
+from utils import AvgrageMeter, create_exp_dir
 import tqdm
-from utils import AvgrageMeter
+from train_gvae_semi_supervised import train_gvae
+from nas_201_api import NASBench201API as API
+from torch_geometric.data import Data
+from copy import deepcopy
+from nas_201_database import NASBench201DataBase
+import random
+import operator
+from models import ICNN
+from typing import Optional
 
-# ログ設定
 log_format = '%(asctime)s %(message)s'
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
+logging.basicConfig(stream = sys.stdout, level = logging.INFO, format = log_format, datefmt = '%m/%d %I:%M:%S %p')
 
-datasets = "ImageNet"
-
-# 設定
 configs = {
-    'result_path': "results/0715/",
+    'nas_bench_201_dataset_path' : 'dataset/nas_201_dataset.pth',
 
+    # which dataset to evaluate?
+    'dataset' : 'ImageNet',
+    # the maximum evaluation number
+    'evaluate_num' : 500,
+
+    # hyperparameters of fine-tunning the ICNN 
+    'lr' : 1e-4,
+    'betas' : (0.0, 0.5),
+    'weight_decay' : 0.0,
+    'epoch_num' : 50,
+    'batch_size' : 32,
+    'topk' : 5,
+
+    # if do not use a pretrained, train a new one, and save it in 'gvae/gvae.pth'
+    'pretrained_gvae' : True, 
+    'zdim' : 64,
+
+    # DE parameters
     'INITIAL_F': 0.5,
     'INITIAL_CR': 0.5,
     'F_GAMMA': 0.1,
@@ -33,39 +49,15 @@ configs = {
     'F_LOWEST': 0.1,
     'F_UPPER': 0.9,
     'DIMENSION': 64,
-    'POPULATION_SIZE': 200,
-    'GENERATION': 50,
-
-    'dataset': datasets,  # 'CIFAR10', 'CIFAR100', 'ImageNet'
-    'gvae_path': 'gvae/gvae_64_{}.pth'.format(datasets),
-    # 'predictor_path': 'semi_predictor/semi_predictor_{}.pth'.format(datasets),
-    'predictor_path': 'icnn/icnn_64_{}.pth'.format(datasets),
-    'latent_path': 'dataset/latent_representations_64dim_{}.pth'.format(datasets),
-    'seed': 42,
-    
-    # ICNN微調整設定
-    'icnn_lr': 1e-4,
-    'icnn_betas': (0.0, 0.5),
-    'icnn_epoch_num': 10,
-    'icnn_batch_size': 32,
-    'tune_interval': 10  # 何世代ごとにICNN微調整するか
+    'POPULATION_SIZE': 50,  # smaller population for incremental learning
+    'GENERATION': 10,       # fewer generations per iteration
+    'step_num' : 1,
+    'eta' : 0.2,
+    'delta_eta' : 0.2,
+    'random_num' : 2000,
 }
 
-latent_data = torch.load(configs['latent_path'],weights_only=False)
-
-def get_border_vaules(latent_data):
-    MAX_value = [-float("inf") for i in range(configs["DIMENSION"])]
-    MIN_value = [float("inf") for i in range(configs["DIMENSION"])]
-
-    for di in range(configs["DIMENSION"]):
-        for latent in latent_data:
-            MAX_value[di] = max(latent[di],MAX_value[di])
-            MIN_value[di] = min(latent[di],MIN_value[di])
-    
-    return MAX_value, MIN_value
-configs['MAX_VALUES'], configs['MIN_VALUES'] = get_border_vaules(latent_data)
-
-os.makedirs(configs['result_path'], exist_ok=True)
+configs['gvae_path'] = 'gvae/gvae_{}_{}.pth'.format(configs['zdim'],configs['dataset'])
 
 class Individual:
     def __init__(self, gene: Optional[torch.tensor]=None, eval_func=None):
@@ -82,29 +74,46 @@ class Individual:
         return float(self.eval_func(self.gene))
 
 class DE:
-    def __init__(self, eval_func, population_size=None, seed=42):
+    def __init__(self, eval_func, labeled_set, population_size=None, seed=42):
         if population_size is None:
             population_size = configs['POPULATION_SIZE']
         self.eval_func = eval_func
         self.population_size = population_size
+        self.labeled_set = labeled_set
         
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
         
+        # Get border values from labeled set
+        latent_data = labeled_set[1]
+        self.MAX_VALUES, self.MIN_VALUES = self.get_border_values(latent_data)
+        
+        # Initialize population from labeled set
         self.population = []
-        for i in range(population_size):
+        for i in range(min(population_size, len(latent_data))):
             gene = latent_data[i]
             individual = Individual(gene=gene, eval_func=eval_func)
             self.population.append(individual)
         
-        logging.info(f"Initialize Size: {population_size}")
+        logging.info(f"Initialize Size: {len(self.population)}")
+    
+    def get_border_values(self, latent_data):
+        MAX_value = [-float("inf") for i in range(configs["DIMENSION"])]
+        MIN_value = [float("inf") for i in range(configs["DIMENSION"])]
+
+        for di in range(configs["DIMENSION"]):
+            for latent in latent_data:
+                MAX_value[di] = max(latent[di],MAX_value[di])
+                MIN_value[di] = min(latent[di],MIN_value[di])
+        
+        return MAX_value, MIN_value
 
     def mutation_and_crossover(self):
         updated_count = 0
         
-        for i in range(self.population_size):
-            indices = list(range(self.population_size))
+        for i in range(len(self.population)):
+            indices = list(range(len(self.population)))
             indices.remove(i)
             np.random.shuffle(indices)
             
@@ -122,7 +131,7 @@ class DE:
             
             for j in range(configs['DIMENSION']):
                 if np.random.rand() < self.population[i].CR or j == jrand:
-                    if configs['MIN_VALUES'][j] <= mutant[j] <= configs['MAX_VALUES'][j]:
+                    if self.MIN_VALUES[j] <= mutant[j] <= self.MAX_VALUES[j]:
                         trial[j] = mutant[j]
                     else:
                         trial[j] = self.population[i].gene[j]
@@ -145,24 +154,14 @@ class DE:
 
     def get_average_fitness(self):
         total_fitness = sum(ind.fitness for ind in self.population)
-        return total_fitness / self.population_size
+        return total_fitness / len(self.population)
 
-    def evolve(self, generations=None, icnn=None):
+    def evolve(self, generations=None):
         if generations is None:
             generations = configs['GENERATION']
         logging.info("Starting DE...")
         
         for generation in range(generations):
-            # ICNN微調整（指定間隔で実行）
-            if icnn is not None and generation % configs['tune_interval'] == 0 and generation > 0:
-                logging.info(f"ICNN微調整実行中... (Generation {generation+1})")
-                icnn = tune_icnn(icnn, self.population)
-                # 評価関数を更新
-                eval_func = create_evaluation_function(None, icnn)
-                for individual in self.population:
-                    individual.eval_func = eval_func
-                    individual.fitness = individual.evaluate()
-            
             updated_count = self.mutation_and_crossover()
             avg_fitness = self.get_average_fitness()
             best_individual = self.get_best_individual(1)[0]
@@ -170,20 +169,16 @@ class DE:
             logging.info(f"Generation {generation+1}: Updated={updated_count}, "
                         f"Average Fitness={avg_fitness:.6f}, Best Fitness={best_individual.fitness:.6f}")
         
-        return self.get_best_individual(top_n=5)
+        return self.get_best_individual(top_n=configs['topk'])
 
-# TODO：評価関数の構造を見直す
-def create_evaluation_function(gvae, icnn):
+def create_evaluation_function(gvae):
     """GVAEとICNNを使用した評価関数を作成"""
     def evaluate(latent_vector):
         with torch.no_grad():
             z = latent_vector.unsqueeze(0).cuda()
             
             # ICNNで直接潜在表現から性能を予測
-            pred_acc = (-icnn(z) + 1.0).squeeze()
-            
-            # 事前学習済みICNNが既に正しいスケールの場合はスケーリング不要
-            # pred_acc = pred_acc * 0.01
+            pred_acc = (-gvae.icnn(z) + 1.0).squeeze()
             
             return pred_acc.item()
     
@@ -198,97 +193,126 @@ def convert_latent_to_architecture(gvae, latent_vector):
         return arch_str
 
 class ICNN_Dataset(Dataset):
-    def __init__(self, latent_vectors, fitness_values):
+    def __init__(self, labeled_set):
         super().__init__()
-        self.latent_vectors = latent_vectors
-        self.fitness_values = fitness_values
+        self.dataset = labeled_set
 
     def __getitem__(self, idx):
-        return self.latent_vectors[idx], self.fitness_values[idx]
+        return self.dataset[1][idx], self.dataset[2][idx]
 
     def __len__(self):
-        return len(self.latent_vectors)
+        return len(self.dataset[1])
 
-def tune_icnn(icnn, population):
-    """現在の集団を使ってICNNを微調整"""
-    # 集団から潜在ベクトルと適応度を抽出
-    latent_vectors = torch.stack([ind.gene for ind in population])
-    fitness_values = torch.tensor([ind.fitness for ind in population], dtype=torch.float32)
-    
-    # 事前学習済みICNNが既に正しいスケールの場合はスケーリング不要
-    # fitness_values = fitness_values / 0.01
-    
-    dataset = ICNN_Dataset(latent_vectors, fitness_values)
-    dataloader = DataLoader(dataset, batch_size=configs['icnn_batch_size'], shuffle=True)
-    
-    optimizer = torch.optim.Adam(
-        icnn.parameters(),
-        lr=configs['icnn_lr'], 
-        betas=configs['icnn_betas'], 
-        weight_decay=1e-5
-    )
-    
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=float(configs['icnn_epoch_num']), eta_min=1e-5
-    )
-    
-    mse = nn.MSELoss(reduction='mean')
-    
-    for epoch in range(configs['icnn_epoch_num']):
-        objs = AvgrageMeter()
-        
-        for step, (latents, fitness) in enumerate(dataloader):
-            n = len(latents)
-            latents = latents.cuda()
-            fitness = fitness.cuda()
-            
-            # ICNNの出力を適応度と一致させる
-            pred_fitness = (-icnn(latents) + 1.0).squeeze()
-            
-            loss = mse(fitness, pred_fitness)
-            
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-            
-            objs.update(loss.data.item(), n)
-            
-            # ICNN制約の適用
-            icnn.constraint_weights()
-        
-        scheduler.step()
-    
-    logging.info('ICNN微調整完了, loss: %e', objs.avg)
-    return icnn
+class CRLSO:
+    def __init__(self, configs = configs):
+        self.database = NASBench201DataBase('data/nasbench201_with_edge_flops_and_params.json')
+        self.dataset = torch.load(configs['nas_bench_201_dataset_path'],weights_only=False)
+        self.configs = configs
 
-def main():
-    logging.info("Loading Model...")
-    gvae = torch.load(configs['gvae_path'], weights_only=False).cuda()
-    
-    # Load ICNN from the saved state_dict
-    icnn = ICNN(input_dim=configs['DIMENSION'], hidden_dim=256, output_dim=1).cuda()
-    icnn.load_state_dict(torch.load(configs['predictor_path'], weights_only=True))
-    
-    gvae.eval()
-    icnn.eval()
-    
-    eval_func = create_evaluation_function(gvae, icnn)
-    
-    de = DE(eval_func, population_size=configs['POPULATION_SIZE'], seed=configs['seed'])
-    best_individuals = de.evolve(generations=configs['GENERATION'], icnn=icnn)
-    
-    logging.info("=== DE Results ===")
-    for i, individual in enumerate(best_individuals):
-        arch_str = convert_latent_to_architecture(gvae, individual.gene)
-        logging.info(f"Rank {i+1}: Predicted={individual.fitness:.6f}, Architecture={arch_str}")
+        if configs['pretrained_gvae']:
+            pass
+        else:
+            train_gvae()
+        self.gvae = torch.load(configs['gvae_path'],weights_only=False).cuda()
+        self.labeled_set = self.gvae.labeled_set
 
-    best_latents = torch.stack([ind.gene for ind in best_individuals])
-    torch.save(best_latents, f'{configs["result_path"]}de_best_latents_{configs["dataset"]}.pth')
-    
-    best_fitnesses = [ind.fitness for ind in best_individuals]
-    torch.save(best_fitnesses, f'{configs["result_path"]}de_best_fitnesses_{configs["dataset"]}.pth')
-    
-    logging.info("Save the results")
+    def main_loop(self, noise = True):
+        while len(self.labeled_set[1]) < (self.configs['evaluate_num']):
+            self.tune_icnn()
+            
+            # Create DE instance with current labeled set
+            eval_func = create_evaluation_function(self.gvae)
+            de = DE(eval_func, self.labeled_set, population_size=self.configs['POPULATION_SIZE'])
+            
+            # Run DE for a few generations
+            best_individuals = de.evolve(generations=self.configs['GENERATION'])
+            
+            # Add new architectures from DE results
+            for individual in best_individuals:
+                latent = individual.gene
+                
+                with torch.no_grad():
+                    arch_tensor = self.gvae.get_tensor(latent.unsqueeze(0))
+                    arch_str = self.gvae.conver_tensor2arch(arch_tensor)
 
-if __name__ == "__main__":
-    main()
+                if arch_str not in set(self.labeled_set[0]):
+                    arch_index = self.dataset.str2index(arch_str)
+
+                    if self.configs['dataset'] == 'CIFAR10':
+                        acc = self.dataset.cifar10_acc[arch_index][0]
+                    elif self.configs['dataset'] == 'CIFAR100':
+                        acc = self.dataset.cifar100_acc[arch_index][0]
+                    elif self.configs['dataset'] == 'ImageNet':
+                        acc = self.dataset.imagenet_acc[arch_index][0]
+
+                    acc = 0.01*acc
+
+                    logging.info('Obtain an new architecture with acc:%f', acc)
+
+                    self.labeled_set[0].append(arch_str)
+                    self.labeled_set[1] = torch.cat(
+                        [self.labeled_set[1], deepcopy(latent.detach().cpu()).unsqueeze(0)])
+                    self.labeled_set[2] = torch.cat(
+                        [self.labeled_set[2], torch.tensor([acc]).float()])
+                    
+                    # Stop if we reach the evaluation limit
+                    if len(self.labeled_set[1]) >= self.configs['evaluate_num']:
+                        break
+
+    def tune_icnn(self, noise = True):
+        mse = nn.MSELoss(reduction = 'mean')
+
+        dataset = ICNN_Dataset(self.labeled_set)
+        dataloader = DataLoader(
+            dataset, batch_size = self.configs['batch_size'], shuffle = True
+        )
+
+        optimizer = torch.optim.Adam(
+            self.gvae.icnn.parameters(),
+            lr = self.configs['lr'], betas = self.configs['betas'], weight_decay = 1e-5
+        )
+
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max = float(self.configs['epoch_num']), eta_min = 1e-5
+        )
+
+        for epoch in tqdm.tqdm(range(self.configs['epoch_num'])):
+            objs = AvgrageMeter()
+            mse = nn.MSELoss(reduction = 'mean')
+            for step, (latents, acc) in enumerate(dataloader):
+                n = len(latents)
+
+                if not noise:
+                    latents = latents.cuda()
+                    acc = acc.cuda()
+                else:
+                    # add some noise to explore the search space
+                    latents = latents.cuda() + 0.05*torch.randn_like(latents.cuda())
+                    acc = acc.cuda() + 0.01*torch.randn_like(acc.cuda())
+
+                pred_acc = (-self.gvae.icnn(latents) + 1.0).squeeze()
+
+                loss = mse(acc, pred_acc)
+
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
+                objs.update(loss.data.item(), n)
+
+                self.gvae.icnn.constraint_weights()
+
+            scheduler.step()
+
+        logging.info('Finetune the icnn, loss_pred:%e', objs.avg)
+
+    def obtain_topk_performance(self, topk = 1):
+        values, indices = self.labeled_set[2].topk(self.configs['topk'])
+        arch_str = self.labeled_set[0][indices[topk]]
+        arch_info = self.database.query_by_str(arch_str)
+        return arch_info
+
+if __name__ == '__main__':
+    lso = CRLSO()
+    lso.main_loop()
+    lso.obtain_topk_performance(3)
