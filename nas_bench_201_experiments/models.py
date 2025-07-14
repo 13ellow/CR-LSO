@@ -145,7 +145,7 @@ class ArchGVAE(nn.Module):
             Resid_MLP(hdim, hdim),
             Resid_MLP(hdim, odim))
         
-        self.icnn = ICNN(zdim, 128, hidden_layer = 4)
+        self.icnn = ICNN(zdim, 256, hidden_layer = 3)
         
         self.tanh = nn.Tanh()
         

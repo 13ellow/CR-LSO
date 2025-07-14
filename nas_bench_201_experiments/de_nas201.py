@@ -8,6 +8,7 @@ from models import ArchGVAE, GNN_Predictor
 from torch_geometric.loader import DataLoader
 from torch_geometric.data import Data
 from collect_201_dataset import conver_cell2graph, arch2list
+from models import ICNN
 import logging
 import sys
 from typing import Optional
@@ -16,11 +17,11 @@ from typing import Optional
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
 
-datasets = "CIFAR10"
+datasets = "ImageNet"
 
 # 設定
 configs = {
-    'result_path': "results/0701/",
+    'result_path': "results/0715/",
 
     'INITIAL_F': 0.5,
     'INITIAL_CR': 0.5,
@@ -34,7 +35,8 @@ configs = {
 
     'dataset': datasets,  # 'CIFAR10', 'CIFAR100', 'ImageNet'
     'gvae_path': 'gvae/gvae_64_{}.pth'.format(datasets),
-    'predictor_path': 'semi_predictor/semi_predictor_{}.pth'.format(datasets),
+    # 'predictor_path': 'semi_predictor/semi_predictor_{}.pth'.format(datasets),
+    'predictor_path': 'icnn/icnn_64_{}.pth'.format(datasets),
     'latent_path': 'dataset/latent_representations_64dim_{}.pth'.format(datasets),
     'seed': 42
 }
@@ -82,7 +84,6 @@ class DE:
         
         self.population = []
         for i in range(population_size):
-            # TODO：gvaeのエンコードで取得した潜在表現を使用する
             gene = latent_data[i]
             individual = Individual(gene=gene, eval_func=eval_func)
             self.population.append(individual)
@@ -152,33 +153,14 @@ class DE:
         return self.get_best_individual(top_n=5)
 
 # TODO：評価関数の構造を見直す
-def create_evaluation_function(gvae, predictor):
-    """GVAEとpredictorを使用した評価関数を作成"""
+def create_evaluation_function(gvae, icnn):
+    """GVAEとICNNを使用した評価関数を作成"""
     def evaluate(latent_vector):
         with torch.no_grad():
             z = latent_vector.unsqueeze(0).cuda()
             
-            # 潜在表現からアーキテクチャ文字列を生成
-            arch_tensor = gvae.get_tensor(z)
-            arch_str = gvae.conver_tensor2arch(arch_tensor)
-            
-            # アーキテクチャ文字列をリストに変換
-            arch_list = arch2list(arch_str)
-            
-            # アーキテクチャリストからグラフ構造を作成
-            edge_index, node_attr, edge_attr, cell_tensor = conver_cell2graph(arch_list)
-            
-            # PyTorch Geometricのデータ構造に変換
-            graph_data = Data(
-                x=node_attr,
-                edge_index=edge_index,
-                edge_attr=edge_attr,
-                tensor=cell_tensor
-            )
-            graph_data = graph_data.cuda()
-            
-            # predictorで性能を予測
-            pred_acc = predictor(graph_data)
+            # ICNNで直接潜在表現から性能を予測
+            pred_acc = (-icnn(z) + 1.0).squeeze()
             
             return pred_acc.item()
     
@@ -195,12 +177,15 @@ def convert_latent_to_architecture(gvae, latent_vector):
 def main():
     logging.info("Loading Model...")
     gvae = torch.load(configs['gvae_path'], weights_only=False).cuda()
-    predictor = torch.load(configs['predictor_path'], weights_only=False).cuda()
+    
+    # Load ICNN from the saved state_dict
+    icnn = ICNN(input_dim=configs['DIMENSION'], hidden_dim=512, output_dim=1).cuda()
+    icnn.load_state_dict(torch.load(configs['predictor_path'], weights_only=True))
     
     gvae.eval()
-    predictor.eval()
+    icnn.eval()
     
-    eval_func = create_evaluation_function(gvae, predictor)
+    eval_func = create_evaluation_function(gvae, icnn)
     
     de = DE(eval_func, population_size=configs['POPULATION_SIZE'], seed=configs['seed'])
     best_individuals = de.evolve(generations=configs['GENERATION'])
