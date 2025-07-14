@@ -89,10 +89,16 @@ class DE:
         latent_data = labeled_set[1]
         self.MAX_VALUES, self.MIN_VALUES = self.get_border_values(latent_data)
         
-        # Initialize population from labeled set
+        # Initialize population from labeled set with noise for diversity
         self.population = []
-        for i in range(min(population_size, len(latent_data))):
-            gene = latent_data[i]
+        for i in range(population_size):
+            if i < len(latent_data):
+                # Use original top-k latents
+                gene = latent_data[i]
+            else:
+                # For additional population members, add noise to existing genes
+                base_idx = i % len(latent_data)
+                gene = latent_data[base_idx] + 0.1 * torch.randn_like(latent_data[base_idx])
             individual = Individual(gene=gene, eval_func=eval_func)
             self.population.append(individual)
         
@@ -219,10 +225,20 @@ class CRLSO:
     def main_loop(self, noise = True):
         while len(self.labeled_set[1]) < (self.configs['evaluate_num']):
             self.tune_icnn()
+
+            # 部分データセットから上位5つの構造を取得
+            values, indices = self.labeled_set[2].topk(self.configs['topk'])
+            topk_latents = [self.labeled_set[1][indice] for indice in indices]
             
-            # Create DE instance with current labeled set
+            # Create DE instance with only top-k latents (similar to crlso.py)
+            topk_labeled_set = [
+                [self.labeled_set[0][i] for i in indices],
+                torch.stack(topk_latents),
+                values
+            ]
+            
             eval_func = create_evaluation_function(self.gvae)
-            de = DE(eval_func, self.labeled_set, population_size=self.configs['POPULATION_SIZE'])
+            de = DE(eval_func, topk_labeled_set, population_size=min(self.configs['POPULATION_SIZE'], len(topk_latents)*10))
             
             # Run DE for a few generations
             best_individuals = de.evolve(generations=self.configs['GENERATION'])
@@ -232,7 +248,7 @@ class CRLSO:
                 latent = individual.gene
                 
                 with torch.no_grad():
-                    arch_tensor = self.gvae.get_tensor(latent.unsqueeze(0))
+                    arch_tensor = self.gvae.get_tensor(latent.unsqueeze(0).cuda())
                     arch_str = self.gvae.conver_tensor2arch(arch_tensor)
 
                 if arch_str not in set(self.labeled_set[0]):
