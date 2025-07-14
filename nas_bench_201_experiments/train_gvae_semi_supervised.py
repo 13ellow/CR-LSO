@@ -17,7 +17,7 @@ os.makedirs('gvae', exist_ok=True)
 os.makedirs('icnn', exist_ok=True)
 
 gvae_configs = {
-    'dataset' : 'CIFAR10', # 'CIFAR10', 'CIFAR100', 'ImageNet'
+    'dataset' : 'CIFAR100', # 'CIFAR10', 'CIFAR100', 'ImageNet'
     'batch_size' : 512,
 
     'lr' : 1e-4,
@@ -370,4 +370,5 @@ def get_gvae(configs = gvae_configs):
     logging.info('ICNN parameters saved to icnn/icnn_{}_{}.pth'.format(configs['zdim'],configs['dataset']))
 
 if __name__ == '__main__':
+    logging.info(f'settings : {gvae_configs["dataset"]}')
     get_gvae()
