@@ -53,9 +53,6 @@ configs = {
 
 latent_data = torch.load(configs['latent_path'],weights_only=False)
 
-# 適応度データの読み込み（crlso.pyと同じスケール）
-fitness_data = torch.load(configs['latent_path'].replace('latent_representations', 'fitness_values'),weights_only=False)
-
 def get_border_vaules(latent_data):
     MAX_value = [-float("inf") for i in range(configs["DIMENSION"])]
     MIN_value = [float("inf") for i in range(configs["DIMENSION"])]
