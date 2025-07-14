@@ -53,6 +53,9 @@ configs = {
 
 latent_data = torch.load(configs['latent_path'],weights_only=False)
 
+# 適応度データの読み込み（crlso.pyと同じスケール）
+fitness_data = torch.load(configs['latent_path'].replace('latent_representations', 'fitness_values'),weights_only=False)
+
 def get_border_vaules(latent_data):
     MAX_value = [-float("inf") for i in range(configs["DIMENSION"])]
     MIN_value = [float("inf") for i in range(configs["DIMENSION"])]
@@ -182,6 +185,9 @@ def create_evaluation_function(gvae, icnn):
             # ICNNで直接潜在表現から性能を予測
             pred_acc = (-icnn(z) + 1.0).squeeze()
             
+            # crlso.pyと同じスケールに合わせる（0.01倍）
+            pred_acc = pred_acc * 0.01
+            
             return pred_acc.item()
     
     return evaluate
@@ -211,6 +217,9 @@ def tune_icnn(icnn, population):
     # 集団から潜在ベクトルと適応度を抽出
     latent_vectors = torch.stack([ind.gene for ind in population])
     fitness_values = torch.tensor([ind.fitness for ind in population], dtype=torch.float32)
+    
+    # 適応度を100倍してICNNの元スケールに戻す
+    fitness_values = fitness_values / 0.01
     
     dataset = ICNN_Dataset(latent_vectors, fitness_values)
     dataloader = DataLoader(dataset, batch_size=configs['icnn_batch_size'], shuffle=True)
