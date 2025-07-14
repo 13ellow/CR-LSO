@@ -30,7 +30,7 @@ configs = {
     'F_LOWEST': 0.1,
     'F_UPPER': 0.9,
     'DIMENSION': 64,
-    'POPULATION_SIZE': 100,
+    'POPULATION_SIZE': 200,
     'GENERATION': 50,
 
     'dataset': datasets,  # 'CIFAR10', 'CIFAR100', 'ImageNet'
@@ -179,7 +179,7 @@ def main():
     gvae = torch.load(configs['gvae_path'], weights_only=False).cuda()
     
     # Load ICNN from the saved state_dict
-    icnn = ICNN(input_dim=configs['DIMENSION'], hidden_dim=512, output_dim=1).cuda()
+    icnn = ICNN(input_dim=configs['DIMENSION'], hidden_dim=256, output_dim=1).cuda()
     icnn.load_state_dict(torch.load(configs['predictor_path'], weights_only=True))
     
     gvae.eval()
