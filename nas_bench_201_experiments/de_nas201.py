@@ -182,8 +182,8 @@ def create_evaluation_function(gvae, icnn):
             # ICNNで直接潜在表現から性能を予測
             pred_acc = (-icnn(z) + 1.0).squeeze()
             
-            # crlso.pyと同じスケールに合わせる（0.01倍）
-            pred_acc = pred_acc * 0.01
+            # 事前学習済みICNNが既に正しいスケールの場合はスケーリング不要
+            # pred_acc = pred_acc * 0.01
             
             return pred_acc.item()
     
@@ -215,8 +215,8 @@ def tune_icnn(icnn, population):
     latent_vectors = torch.stack([ind.gene for ind in population])
     fitness_values = torch.tensor([ind.fitness for ind in population], dtype=torch.float32)
     
-    # 適応度を100倍してICNNの元スケールに戻す
-    fitness_values = fitness_values / 0.01
+    # 事前学習済みICNNが既に正しいスケールの場合はスケーリング不要
+    # fitness_values = fitness_values / 0.01
     
     dataset = ICNN_Dataset(latent_vectors, fitness_values)
     dataloader = DataLoader(dataset, batch_size=configs['icnn_batch_size'], shuffle=True)
