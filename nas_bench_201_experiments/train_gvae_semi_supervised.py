@@ -17,7 +17,7 @@ os.makedirs('gvae', exist_ok=True)
 os.makedirs('icnn', exist_ok=True)
 
 gvae_configs = {
-    'dataset' : 'ImageNet',
+    'dataset' : 'CIFAR10', # 'CIFAR10', 'CIFAR100', 'ImageNet'
     'batch_size' : 512,
 
     'lr' : 1e-4,
