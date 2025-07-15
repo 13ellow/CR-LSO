@@ -27,15 +27,15 @@ configs = {
     # which dataset to evaluate?
     'dataset' : 'ImageNet',
     # the maximum evaluation number
-    'evaluate_num' : 350,  # 300 → 350 (current: 300, need more)
+    'evaluate_num' : 350,  # (current: 300, need more)
 
     # hyperparameters of fine-tunning the ICNN 
     'lr' : 1e-4,
     'betas' : (0.0, 0.5),
     'weight_decay' : 0.0,
-    'epoch_num' : 20,      # 50 → 20 for faster execution
-    'batch_size' : 64,     # 32 → 64 for faster execution
-    'topk' : 5,
+    'epoch_num' : 50,
+    'batch_size' : 32,
+    'topk' : 15,
 
     'pretrained_gvae' : True, 
     'zdim' : 64,
@@ -48,7 +48,7 @@ configs = {
     'F_LOWEST': 0.1,
     'F_UPPER': 0.9,
     'DIMENSION': 64,
-    'POPULATION_SIZE': 50,  # smaller population for incremental learning
+    'POPULATION_SIZE': 200,  # smaller population for incremental learning
     'GENERATION': 5,        # 10 → 5 for faster execution
     'step_num' : 1,
     'eta' : 0.2,
