@@ -244,6 +244,7 @@ class CRLSO:
             best_individuals = de.evolve(generations=self.configs['GENERATION'])
             
             # Add new architectures from DE results
+            new_arch_count = 0
             for individual in best_individuals:
                 latent = individual.gene
                 
@@ -271,9 +272,47 @@ class CRLSO:
                     self.labeled_set[2] = torch.cat(
                         [self.labeled_set[2], torch.tensor([acc]).float()])
                     
+                    new_arch_count += 1
+                    
                     # Stop if we reach the evaluation limit
                     if len(self.labeled_set[1]) >= self.configs['evaluate_num']:
                         break
+            
+            # If no new architectures found, add random exploration
+            if new_arch_count == 0:
+                logging.info("No new architectures found. Adding random exploration...")
+                # Add random noise to diversify search
+                for _ in range(self.configs['topk']):
+                    # Sample random latent from the latent space bounds
+                    random_latent = torch.randn(self.configs['DIMENSION'])
+                    
+                    with torch.no_grad():
+                        arch_tensor = self.gvae.get_tensor(random_latent.unsqueeze(0).cuda())
+                        arch_str = self.gvae.conver_tensor2arch(arch_tensor)
+                    
+                    if arch_str not in set(self.labeled_set[0]):
+                        arch_index = self.dataset.str2index(arch_str)
+
+                        if self.configs['dataset'] == 'CIFAR10':
+                            acc = self.dataset.cifar10_acc[arch_index][0]
+                        elif self.configs['dataset'] == 'CIFAR100':
+                            acc = self.dataset.cifar100_acc[arch_index][0]
+                        elif self.configs['dataset'] == 'ImageNet':
+                            acc = self.dataset.imagenet_acc[arch_index][0]
+
+                        acc = 0.01*acc
+
+                        logging.info('Obtain random architecture with acc:%f', acc)
+
+                        self.labeled_set[0].append(arch_str)
+                        self.labeled_set[1] = torch.cat(
+                            [self.labeled_set[1], random_latent.unsqueeze(0)])
+                        self.labeled_set[2] = torch.cat(
+                            [self.labeled_set[2], torch.tensor([acc]).float()])
+                        
+                        break  # Add only one random architecture per iteration
+            
+            logging.info(f"Current labeled_set size: {len(self.labeled_set[1])}/{self.configs['evaluate_num']}")
 
     def tune_icnn(self, noise = True):
         mse = nn.MSELoss(reduction = 'mean')
