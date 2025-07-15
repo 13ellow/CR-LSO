@@ -27,7 +27,7 @@ configs = {
     # which dataset to evaluate?
     'dataset' : 'ImageNet',
     # the maximum evaluation number
-    'evaluate_num' : 200,  # 500 → 200 for faster execution
+    'evaluate_num' : 350,  # 300 → 350 (current: 300, need more)
 
     # hyperparameters of fine-tunning the ICNN 
     'lr' : 1e-4,
@@ -234,6 +234,8 @@ class CRLSO:
         logging.info("CRLSO initialization complete")
 
     def main_loop(self, noise = True):
+        logging.info("Starting main_loop...")
+        logging.info(f"Target: {self.configs['evaluate_num']}, Current: {len(self.labeled_set[1])}")
         iteration_count = 0
         while len(self.labeled_set[1]) < (self.configs['evaluate_num']):
             # Tune ICNN every 3 iterations for speed
