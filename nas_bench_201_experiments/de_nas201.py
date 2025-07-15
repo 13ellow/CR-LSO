@@ -27,17 +27,16 @@ configs = {
     # which dataset to evaluate?
     'dataset' : 'ImageNet',
     # the maximum evaluation number
-    'evaluate_num' : 500,
+    'evaluate_num' : 200,  # 500 → 200 for faster execution
 
     # hyperparameters of fine-tunning the ICNN 
     'lr' : 1e-4,
     'betas' : (0.0, 0.5),
     'weight_decay' : 0.0,
-    'epoch_num' : 50,
-    'batch_size' : 32,
+    'epoch_num' : 20,      # 50 → 20 for faster execution
+    'batch_size' : 64,     # 32 → 64 for faster execution
     'topk' : 5,
 
-    # if do not use a pretrained, train a new one, and save it in 'gvae/gvae.pth'
     'pretrained_gvae' : True, 
     'zdim' : 64,
 
@@ -50,7 +49,7 @@ configs = {
     'F_UPPER': 0.9,
     'DIMENSION': 64,
     'POPULATION_SIZE': 50,  # smaller population for incremental learning
-    'GENERATION': 10,       # fewer generations per iteration
+    'GENERATION': 5,        # 10 → 5 for faster execution
     'step_num' : 1,
     'eta' : 0.2,
     'delta_eta' : 0.2,
@@ -223,8 +222,12 @@ class CRLSO:
         self.labeled_set = self.gvae.labeled_set
 
     def main_loop(self, noise = True):
+        iteration_count = 0
         while len(self.labeled_set[1]) < (self.configs['evaluate_num']):
-            self.tune_icnn()
+            # Tune ICNN every 3 iterations for speed
+            if iteration_count % 3 == 0:
+                self.tune_icnn()
+            iteration_count += 1
 
             # 部分データセットから上位5つの構造を取得
             values, indices = self.labeled_set[2].topk(self.configs['topk'])
