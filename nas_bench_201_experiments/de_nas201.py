@@ -25,7 +25,7 @@ configs = {
     'nas_bench_201_dataset_path' : 'dataset/nas_201_dataset.pth',
 
     # which dataset to evaluate?
-    'dataset' : 'ImageNet',
+    'dataset' : 'CIFAR100',
     # the maximum evaluation number
     'evaluate_num' : 500,  # (current: 300, need more)
 
