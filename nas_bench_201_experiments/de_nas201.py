@@ -27,7 +27,7 @@ configs = {
     # which dataset to evaluate?
     'dataset' : 'ImageNet',
     # the maximum evaluation number
-    'evaluate_num' : 350,  # (current: 300, need more)
+    'evaluate_num' : 500,  # (current: 300, need more)
 
     # hyperparameters of fine-tunning the ICNN 
     'lr' : 1e-4,
@@ -35,7 +35,7 @@ configs = {
     'weight_decay' : 0.0,
     'epoch_num' : 50,
     'batch_size' : 32,
-    'topk' : 15,
+    'topk' : 25,
 
     'pretrained_gvae' : True, 
     'zdim' : 64,
@@ -48,12 +48,8 @@ configs = {
     'F_LOWEST': 0.1,
     'F_UPPER': 0.9,
     'DIMENSION': 64,
-    'POPULATION_SIZE': 200,  # smaller population for incremental learning
-    'GENERATION': 5,        # 10 → 5 for faster execution
-    'step_num' : 1,
-    'eta' : 0.2,
-    'delta_eta' : 0.2,
-    'random_num' : 2000,
+    'POPULATION_SIZE': 500,  # smaller population for incremental learning
+    'GENERATION': 10,
 }
 
 configs['gvae_path'] = 'gvae/gvae_{}_{}.pth'.format(configs['zdim'],configs['dataset'])
