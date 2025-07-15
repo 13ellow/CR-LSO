@@ -210,16 +210,28 @@ class ICNN_Dataset(Dataset):
 
 class CRLSO:
     def __init__(self, configs = configs):
+        logging.info("Initializing CRLSO...")
         self.database = NASBench201DataBase('data/nasbench201_with_edge_flops_and_params.json')
+        logging.info("Database loaded")
+        
         self.dataset = torch.load(configs['nas_bench_201_dataset_path'],weights_only=False)
+        logging.info("Dataset loaded")
+        
         self.configs = configs
 
         if configs['pretrained_gvae']:
-            pass
+            logging.info("Loading pretrained GVAE...")
         else:
+            logging.info("Training new GVAE...")
             train_gvae()
+            
+        logging.info(f"Loading GVAE from: {configs['gvae_path']}")
         self.gvae = torch.load(configs['gvae_path'],weights_only=False).cuda()
+        logging.info("GVAE loaded and moved to CUDA")
+        
         self.labeled_set = self.gvae.labeled_set
+        logging.info(f"Initial labeled_set size: {len(self.labeled_set[1])}")
+        logging.info("CRLSO initialization complete")
 
     def main_loop(self, noise = True):
         iteration_count = 0
