@@ -25,7 +25,7 @@ configs = {
     'nas_bench_201_dataset_path' : 'dataset/nas_201_dataset.pth',
 
     # which dataset to evaluate?
-    'dataset' : 'CIFAR100',
+    'dataset' : 'ImageNet',
     # the maximum evaluation number
     'evaluate_num' : 500,  # (current: 300, need more)
 
@@ -49,7 +49,7 @@ configs = {
     'F_UPPER': 0.9,
     'DIMENSION': 64,
     'POPULATION_SIZE': 500,  # smaller population for incremental learning
-    'GENERATION': 10,
+    'GENERATION': 30,
 }
 
 configs['gvae_path'] = 'gvae/gvae_{}_{}.pth'.format(configs['zdim'],configs['dataset'])
