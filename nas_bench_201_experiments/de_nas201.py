@@ -25,7 +25,7 @@ configs = {
     'nas_bench_201_dataset_path' : 'dataset/nas_201_dataset.pth',
 
     # which dataset to evaluate?
-    'dataset' : 'ImageNet',
+    'dataset' : 'CIFAR10',
     # the maximum evaluation number
     'evaluate_num' : 500,  # (current: 300, need more)
 
@@ -374,13 +374,55 @@ class CRLSO:
 
         logging.info('Finetune the icnn, loss_pred:%e', objs.avg)
 
-    def obtain_topk_performance(self, topk = 1):
-        values, indices = self.labeled_set[2].topk(self.configs['topk'])
-        arch_str = self.labeled_set[0][indices[topk]]
-        arch_info = self.database.query_by_str(arch_str)
-        return arch_info
+    def obtain_topk_performance(self, k=3):
+        """
+        探索で得られた個体集団の中から、性能上位k個の構造と性能を出力する。
+        """
+        logging.info(f"\n--- Displaying Top {k} Discovered Architectures on {self.configs['dataset']} ---")
+
+        # labeled_set[2] は精度のテンソル
+        num_available = len(self.labeled_set[2])
+        if num_available == 0:
+            logging.warning("No architectures have been evaluated yet.")
+            return
+
+        # 探索したアーキテクチャがk個未満の場合を考慮
+        actual_k = min(k, num_available)
+        if actual_k < k:
+             logging.warning(f"Requested top {k}, but only {num_available} architectures found. Displaying top {actual_k}.")
+
+        # 上位k個の値（精度）とインデックスを取得
+        top_accuracies, top_indices = self.labeled_set[2].topk(actual_k)
+
+        print("\n==================================================================")
+        print(f"          Top {actual_k} Architectures Found by CRLSO")
+        print("==================================================================")
+
+        for i in range(actual_k):
+            index = top_indices[i]
+            # accは0.01倍されているので、パーセント表示のために100倍する
+            accuracy = top_accuracies[i].item() * 100
+            arch_str = self.labeled_set[0][index]
+
+            # NAS-Bench-201データベースから詳細情報を取得
+            arch_info = self.database.query_by_str(arch_str)
+
+            print(f"\n[{i+1}] Rank-{i+1} Architecture")
+            print(f"    Accuracy: {accuracy:.2f}%")
+            print(f"    Arch String: {arch_str}")
+            print(f"    Details from database:")
+            # arch_infoが辞書であることを期待して整形して出力
+            if isinstance(arch_info, dict):
+                for key, value in arch_info.items():
+                    print(f"      - {key}: {value}")
+            else:
+                print(f"      {arch_info}")
+
+        print("==================================================================\n")
 
 if __name__ == '__main__':
     lso = CRLSO()
     lso.main_loop()
-    lso.obtain_topk_performance(3)
+
+    # 探索終了後、最終的な個体集団から上位3つの性能を持つアーキテクチャ情報を表示
+    lso.obtain_topk_performance(k=3)
